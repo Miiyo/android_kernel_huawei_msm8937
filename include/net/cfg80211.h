@@ -79,6 +79,10 @@ struct wiphy;
 #define CFG80211_RAND_TA_FOR_PUBLIC_ACTION_FRAME 1
 #define CFG80211_REPORT_BETTER_BSS_IN_SCHED_SCAN 1
 
+#ifndef CONFIG_HW_GET_EXT_SIG
+#define CONFIG_HW_GET_EXT_SIG
+#endif
+
 /*
  * wireless hardware capability structures
  */
@@ -1144,7 +1148,11 @@ struct sta_bss_parameters {
  *	towards this station.
  */
 struct station_info {
-	u32 filled;
+#ifdef CONFIG_HW_GET_EXT_SIG
+	u64 filled;
+#else
+ 	u32 filled;
+#endif
 	u32 connected_time;
 	u32 inactive_time;
 	u64 rx_bytes;
@@ -1181,6 +1189,11 @@ struct station_info {
 	enum nl80211_mesh_power_mode nonpeer_pm;
 
 	u32 expected_throughput;
+#ifdef CONFIG_HW_GET_EXT_SIG
+	s32 noise;
+	s32 snr;
+	s32 chload;
+#endif
 
 	/*
 	 * Note: Add a new enum station_info_flags value for each new field and
