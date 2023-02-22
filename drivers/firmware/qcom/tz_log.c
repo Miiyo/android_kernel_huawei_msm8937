@@ -497,6 +497,10 @@ static int _disp_tz_interrupt_stats(void)
 
 	for (i = 0; i < (*num_int); i++) {
 		tzdbg_ptr = (struct tzdbg_int_t *)ptr;
+		if (len >= (debug_rw_buf_size - 1)) {
+			pr_warn("%s: Cannot fit all info into the buffer when it is checked firstly\n", __func__);
+			break;
+		}
 		len += snprintf(tzdbg.disp_buf + len,
 				(debug_rw_buf_size - 1) - len,
 				"     Interrupt Number          : 0x%x\n"
@@ -506,18 +510,24 @@ static int _disp_tz_interrupt_stats(void)
 				(uint32_t)tzdbg_ptr->int_info,
 				(uint8_t *)tzdbg_ptr->int_desc);
 		for (j = 0; j < tzdbg.diag_buf->cpu_count; j++) {
+			if (len >= (debug_rw_buf_size - 1)) {
+				pr_warn("%s: Cannot fit all info into the buffer when it is checked secondly\n", __func__);
+				break;
+			}
 			len += snprintf(tzdbg.disp_buf + len,
 				(debug_rw_buf_size - 1) - len,
 				"     int_count on CPU # %d      : %u\n",
 				(uint32_t)j,
 				(uint32_t)tzdbg_ptr->int_count[j]);
 		}
-		len += snprintf(tzdbg.disp_buf + len, debug_rw_buf_size - 1,
-									"\n");
+		if (len >= (debug_rw_buf_size - 1)) {
+			pr_warn("%s: Cannot fit all info into the buffer when it is checked thirdly\n", __func__);
+			break;
+		}
+		len += snprintf(tzdbg.disp_buf + len, (debug_rw_buf_size - 1) - len, "\n");
 
-		if (len > (debug_rw_buf_size - 1)) {
-			pr_warn("%s: Cannot fit all info into the buffer\n",
-								__func__);
+		if (len >= (debug_rw_buf_size - 1)) {
+			pr_warn("%s: Cannot fit all info into the buffer when it is checked fourthly\n", __func__);
 			break;
 		}
 
