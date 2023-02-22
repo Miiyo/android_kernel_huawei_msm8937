@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2010 - 2016 Novatek, Inc.
+ * Copyright (C) 2010 - 2018 Novatek, Inc.
  *
- * $Revision: 4017 $
- * $Date: 2016-04-01 09:41:08 +0800 (星期五, 01 四月 2016) $
+ * $Revision: 47247 $
+ * $Date: 2019-07-10 10:41:36 +0800 (Wed, 10 Jul 2019) $
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,223 +17,35 @@
  *
  */
 
+
 #include <linux/proc_fs.h>
-#include <linux/unistd.h>
-
-#include <linux/fs.h>
-#include <linux/cdev.h>
-#include <linux/device.h>
-#include <asm/uaccess.h>
-#include <linux/slab.h>
-
-#include <asm/uaccess.h>
-#include <linux/delay.h>
-
-#include <linux/regulator/consumer.h>
-#include <huawei_platform/log/log_jank.h>
-#include "../../huawei_ts_kit_algo.h"
-#if defined (CONFIG_HUAWEI_DSM)
-#include <dsm/dsm_pub.h>
-#endif
+#include <linux/seq_file.h>
 
 #include "nt36xxx.h"
 
-
+#if NVT_TOUCH_EXT_PROC
 #define NVT_FW_VERSION "nvt_fw_version"
 #define NVT_BASELINE "nvt_baseline"
 #define NVT_RAW "nvt_raw"
 #define NVT_DIFF "nvt_diff"
 
-#define I2C_TANSFER_LENGTH  64
+#define BUS_TRANSFER_LENGTH  64
 
 #define NORMAL_MODE 0x00
 #define TEST_MODE_1 0x21
 #define TEST_MODE_2 0x22
+#define HANDSHAKING_HOST_READY 0xBB
 
 #define XDATA_SECTOR_SIZE   256
 
 static uint8_t xdata_tmp[2048] = {0};
 static int32_t xdata[2048] = {0};
-uint8_t nvt_fw_ver = 0;
-static uint8_t x_num = 0;
-static uint8_t y_num = 0;
-static uint8_t button_num = 0;
 
 static struct proc_dir_entry *NVT_proc_fw_version_entry;
 static struct proc_dir_entry *NVT_proc_baseline_entry;
 static struct proc_dir_entry *NVT_proc_raw_entry;
 static struct proc_dir_entry *NVT_proc_diff_entry;
 
-extern struct nvt_ts_data *nvt_ts;
-extern int32_t novatek_ts_kit_i2c_read(struct i2c_client *client, uint16_t i2c_addr, uint8_t *buf, uint16_t len);
-extern int32_t novatek_ts_kit_i2c_dummy_read(struct i2c_client *client, uint16_t i2c_addr);
-extern int32_t novatek_ts_kit_i2c_write(struct i2c_client *client, uint16_t i2c_addr, uint8_t *buf, uint16_t len);
-extern int32_t nvt_kit_clear_fw_status(void);
-extern int32_t nvt_kit_check_fw_status(void);
-//extern struct ts_data g_ts_data;
-
-
-
-/*******************************************************
-  Create Device Node (Proc Entry)
-*******************************************************/
-#if NVT_TOUCH_PROC
-static struct proc_dir_entry *NVT_proc_entry;
-#define DEVICE_NAME	"NVTflash"
-
-/*******************************************************
-Description:
-	Novatek touchscreen /proc/NVTflash read function.
-
-return:
-	Executive outcomes. 2---succeed. -5,-14---failed.
-*******************************************************/
-static ssize_t nvt_flash_read(struct file *file, char __user *buff, size_t count, loff_t *offp)
-{
-	uint8_t str[68] = {0};
-	int32_t ret = -1;
-	int32_t retries = 0;
-	int8_t i2c_wr = 0;
-	u16 tmp_addr = 0;
-
-	if (count > sizeof(str))
-		return -EFAULT;
-
-	if (copy_from_user(str, buff, count))
-		return -EFAULT;
-
-	i2c_wr = str[0] >> 7;
-
-	if (i2c_wr == 0) {	//I2C write
-		TS_LOG_DEBUG("%s: i2c_addr=0x%02X, len=%d\n", __func__, (str[0] & 0x7F), str[1]);
-		
-		if (!nvt_ts->chip_data->ts_platform_data->bops->bus_read) {
-			TS_LOG_ERR("%s: error, invalid bus_write\n", __func__);
-			return -EIO;
-		}
-		
-		mutex_lock(&nvt_ts->i2c_mutex);
-		tmp_addr = nvt_ts->chip_data->ts_platform_data->client->addr;
-		nvt_ts->chip_data->ts_platform_data->client->addr = (str[0] & 0x7F);
-		
-		ret = nvt_ts->chip_data->ts_platform_data->bops->bus_write(&str[2], str[1]);
-		if (ret < 0)
-			TS_LOG_ERR("%s: error, bus_write fail, ret=%d\n", __func__, ret);
-		
-		nvt_ts->chip_data->ts_platform_data->client->addr = tmp_addr;
-		mutex_unlock(&nvt_ts->i2c_mutex);
-
-		return ret;
-	} else if (i2c_wr == 1) {	//I2C read	
-		TS_LOG_DEBUG("%s: i2c_addr=0x%02X, len=%d\n", __func__, (str[0] & 0x7F), str[1]);
-	
-		if (!nvt_ts->chip_data->ts_platform_data->bops->bus_read) {
-			TS_LOG_ERR("%s: error, invalid bus_read\n", __func__);
-			return -EIO;
-		}
-	
-		mutex_lock(&nvt_ts->i2c_mutex);
-		tmp_addr = nvt_ts->chip_data->ts_platform_data->client->addr;
-		nvt_ts->chip_data->ts_platform_data->client->addr = (str[0] & 0x7F);
-	
-		ret = nvt_ts->chip_data->ts_platform_data->bops->bus_read(&str[2], 1, &str[3], (str[1] - 1));
-		if (ret < 0)
-			TS_LOG_ERR("%s: error, bus_read fail, ret=%d\n", __func__, ret);
-	
-		nvt_ts->chip_data->ts_platform_data->client->addr = tmp_addr;
-		mutex_unlock(&nvt_ts->i2c_mutex);
-	
-		// copy buff to user if i2c transfer
-		if (retries < 20) {
-			if (copy_to_user(buff, str, count))
-				return -EFAULT;
-		}
-
-		return ret;
-	} else {
-		TS_LOG_ERR("%s: Call error, str[0]=%d\n", __func__, str[0]);
-		return -EFAULT;
-	}
-}
-
-/*******************************************************
-Description:
-	Novatek touchscreen /proc/NVTflash open function.
-
-return:
-	Executive outcomes. 0---succeed. -12---failed.
-*******************************************************/
-static int32_t nvt_flash_open(struct inode *inode, struct file *file)
-{
-	struct nvt_flash_data *dev;
-
-	dev = kmalloc(sizeof(struct nvt_flash_data), GFP_KERNEL);
-	if (dev == NULL) {
-		TS_LOG_ERR("%s: Failed to allocate memory for nvt flash data\n", __func__);
-		return -ENOMEM;
-	}
-
-	rwlock_init(&dev->lock);
-	file->private_data = dev;
-
-	return 0;
-}
-
-/*******************************************************
-Description:
-	Novatek touchscreen /proc/NVTflash close function.
-
-return:
-	Executive outcomes. 0---succeed.
-*******************************************************/
-static int32_t nvt_flash_close(struct inode *inode, struct file *file)
-{
-	struct nvt_flash_data *dev = file->private_data;
-
-	if (dev)
-		kfree(dev);
-
-	return 0;
-}
-
-static const struct file_operations nvt_flash_fops = {
-	.owner = THIS_MODULE,
-	.open = nvt_flash_open,
-	.release = nvt_flash_close,
-	.read = nvt_flash_read,
-};
-
-/*******************************************************
-Description:
-	Novatek touchscreen /proc/NVTflash initial function.
-
-return:
-	Executive outcomes. 0---succeed. -12---failed.
-*******************************************************/
-int32_t nvt_kit_flash_proc_init(void)
-{
-	NVT_proc_entry = proc_create(DEVICE_NAME, 0444, NULL,&nvt_flash_fops);
-	if (NVT_proc_entry == NULL) {
-		TS_LOG_ERR("%s: Failed!\n", __func__);
-		return -ENOMEM;
-	} else {
-		TS_LOG_INFO("%s: Succeeded!\n", __func__);
-	}
-
-	TS_LOG_INFO("============================================================\n");
-	TS_LOG_INFO("Create /proc/NVTflash\n");
-	TS_LOG_INFO("============================================================\n");
-
-	return 0;
-}
-#endif
-
-
-
-/*******************************************************
-  Create Device Node (Ext Proc Entry)
-*******************************************************/
-#if NVT_TOUCH_EXT_PROC
 /*******************************************************
 Description:
 	Novatek touchscreen change mode function.
@@ -240,122 +53,24 @@ Description:
 return:
 	n.a.
 *******************************************************/
-void nvt_kit_change_mode(uint8_t mode)
+void nvt_change_mode(uint8_t mode)
 {
 	uint8_t buf[8] = {0};
 
-	//---set xdata index to 0x11E00---
-	buf[0] = 0xFF;
-	buf[1] = (nvt_ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
-	buf[2] = (nvt_ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
-	novatek_ts_kit_i2c_write(nvt_ts->client, I2C_FW_Address, buf, 3);
+	//---set xdata index to EVENT BUF ADDR---
+	nvt_set_page(I2C_FW_Address, ts->mmap->EVENT_BUF_ADDR | EVENT_MAP_HOST_CMD);
 
 	//---set mode---
-	buf[0] = 0x50;
+	buf[0] = EVENT_MAP_HOST_CMD;
 	buf[1] = mode;
-	novatek_ts_kit_i2c_write(nvt_ts->client, I2C_FW_Address, buf, 2);
+	CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 2);
 
 	if (mode == NORMAL_MODE) {
-		buf[0] = 0x51;
-		buf[1] = 0xBB;
-		novatek_ts_kit_i2c_write(nvt_ts->client, I2C_FW_Address, buf, 2);
-	}
-}
-
-/*******************************************************
-Description:
-	Novatek touchscreen switch no PD function.
-
-return:
-	Executive outcomes. 0---success. -1---fail.
-*******************************************************/
-int8_t nvt_kit_switch_noPD(uint8_t noPD)
-{
-	uint8_t buf[8] = {0};
-	uint8_t retry = 0;
-	int8_t ret = 0;
-
-	for (retry = 0; retry < 5; retry++) {
-		//---set xdata index to 0x11E00---
-		buf[0] = 0xFF;
-		buf[1] = (nvt_ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
-		buf[2] = (nvt_ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
-		novatek_ts_kit_i2c_write(nvt_ts->client, I2C_FW_Address, buf, 3);
-
-		//---switch noPD---
-		buf[0] = 0x50;
-		buf[1] = noPD;
-		novatek_ts_kit_i2c_write(nvt_ts->client, I2C_FW_Address, buf, 2);
-
+		buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
+		buf[1] = HANDSHAKING_HOST_READY;
+		CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 2);
 		msleep(20);
-
-		buf[0] = 0x50;
-		buf[1] = 0xFF;
-		novatek_ts_kit_i2c_read(nvt_ts->client, I2C_FW_Address, buf, 2);
-
-		if (buf[1] == 0x00)
-			break;
-
-		msleep(10);
 	}
-
-	if (unlikely(retry == 5)) {
-		TS_LOG_ERR("%s: switch noPD 0x%02X failed\n", __func__, noPD);
-		ret = -1;
-	}
-
-	return ret;
-}
-
-/*******************************************************
-Description:
-	Novatek touchscreen get firmware related information
-	function.
-
-return:
-	Executive outcomes. 0---success. -1---fail.
-*******************************************************/
-int8_t nvt_kit_get_fw_info(void)
-{
-	uint8_t buf[64] = {0};
-	uint32_t retry_count = 0;
-	int8_t ret = 0;
-
-info_retry:
-	//---set xdata index to 0x11E00---
-	buf[0] = 0xFF;
-	buf[1] = (nvt_ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
-	buf[2] = (nvt_ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
-	novatek_ts_kit_i2c_write(nvt_ts->client, I2C_FW_Address, buf, 3);
-
-	//---read fw info---
-	buf[0] = 0x78;
-	novatek_ts_kit_i2c_read(nvt_ts->client, I2C_FW_Address, buf, 17);
-	nvt_fw_ver = buf[1];
-	x_num = buf[3];
-	y_num = buf[4];
-	button_num = buf[11];
-
-	TS_LOG_INFO("%s: nvt_fw_ver=0x%02X\n", __func__, nvt_fw_ver);
-	//---clear x_num, y_num if fw info is broken---
-	if ((buf[1] + buf[2]) != 0xFF) {
-		TS_LOG_ERR("%s: FW info is broken! nvt_fw_ver=0x%02X, ~nvt_fw_ver=0x%02X\n", __func__, buf[1], buf[2]);
-		x_num = 0;
-		y_num = 0;
-		button_num = 0;
-
-		if(retry_count < 3) {
-			retry_count++;
-			TS_LOG_ERR("%s: retry_count=%d\n", __func__, retry_count);
-			goto info_retry;
-		} else {
-			ret = -1;
-		}
-	} else {
-		ret = 0;
-	}
-
-	return ret;
 }
 
 /*******************************************************
@@ -365,22 +80,19 @@ Description:
 return:
 	Executive outcomes. 0---pipe 0. 1---pipe 1.
 *******************************************************/
-uint8_t nvt_kit_get_fw_pipe(void)
+uint8_t nvt_get_fw_pipe(void)
 {
 	uint8_t buf[8]= {0};
 
-	//---set xdata index to 0x11E00---
-	buf[0] = 0xFF;
-	buf[1] = (nvt_ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
-	buf[2] = (nvt_ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
-	novatek_ts_kit_i2c_write(nvt_ts->client, I2C_FW_Address, buf, 3);
+	//---set xdata index to EVENT BUF ADDR---
+	nvt_set_page(I2C_FW_Address, ts->mmap->EVENT_BUF_ADDR | EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE);
 
 	//---read fw status---
-	buf[0] = 0x51;
+	buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
 	buf[1] = 0x00;
-	novatek_ts_kit_i2c_read(nvt_ts->client, I2C_FW_Address, buf, 2);
+	CTP_I2C_READ(ts->client, I2C_FW_Address, buf, 2);
 
-	//TS_LOG_INFO("FW pipe=%d, buf[1]=0x%02X\n", (buf[1]&0x01), buf[1]);
+	//NVT_LOG("FW pipe=%d, buf[1]=0x%02X\n", (buf[1]&0x01), buf[1]);
 
 	return (buf[1] & 0x01);
 }
@@ -392,12 +104,12 @@ Description:
 return:
 	n.a.
 *******************************************************/
-void nvt_kit_read_mdata(uint32_t xdata_addr)
+void nvt_read_mdata(uint32_t xdata_addr, uint32_t xdata_btn_addr)
 {
 	int32_t i = 0;
 	int32_t j = 0;
 	int32_t k = 0;
-	uint8_t buf[I2C_TANSFER_LENGTH + 1] = {0};
+	uint8_t buf[BUS_TRANSFER_LENGTH + 1] = {0};
 	uint32_t head_addr = 0;
 	int32_t dummy_len = 0;
 	int32_t data_len = 0;
@@ -406,7 +118,7 @@ void nvt_kit_read_mdata(uint32_t xdata_addr)
 	//---set xdata sector address & length---
 	head_addr = xdata_addr - (xdata_addr % XDATA_SECTOR_SIZE);
 	dummy_len = xdata_addr - head_addr;
-	data_len = x_num * y_num * 2;
+	data_len = ts->x_num * ts->y_num * 2;
 	residual_len = (head_addr + dummy_len + data_len) % XDATA_SECTOR_SIZE;
 
 	//printk("head_addr=0x%05X, dummy_len=0x%05X, data_len=0x%05X, residual_len=0x%05X\n", head_addr, dummy_len, data_len, residual_len);
@@ -414,21 +126,18 @@ void nvt_kit_read_mdata(uint32_t xdata_addr)
 	//read xdata : step 1
 	for (i = 0; i < ((dummy_len + data_len) / XDATA_SECTOR_SIZE); i++) {
 		//---change xdata index---
-		buf[0] = 0xFF;
-		buf[1] = ((head_addr + XDATA_SECTOR_SIZE * i) >> 16) & 0xFF;
-		buf[2] = ((head_addr + XDATA_SECTOR_SIZE * i) >> 8) & 0xFF;
-		novatek_ts_kit_i2c_write(nvt_ts->client, I2C_FW_Address, buf, 3);
+		nvt_set_page(I2C_FW_Address, head_addr + XDATA_SECTOR_SIZE * i);
 
-		//---read xdata by I2C_TANSFER_LENGTH
-		for (j = 0; j < (XDATA_SECTOR_SIZE / I2C_TANSFER_LENGTH); j++) {
+		//---read xdata by BUS_TRANSFER_LENGTH
+		for (j = 0; j < (XDATA_SECTOR_SIZE / BUS_TRANSFER_LENGTH); j++) {
 			//---read data---
-			buf[0] = I2C_TANSFER_LENGTH * j;
-			novatek_ts_kit_i2c_read(nvt_ts->client, I2C_FW_Address, buf, I2C_TANSFER_LENGTH + 1);
+			buf[0] = BUS_TRANSFER_LENGTH * j;
+			CTP_I2C_READ(ts->client, I2C_FW_Address, buf, BUS_TRANSFER_LENGTH + 1);
 
 			//---copy buf to xdata_tmp---
-			for (k = 0; k < I2C_TANSFER_LENGTH; k++) {
-				xdata_tmp[XDATA_SECTOR_SIZE * i + I2C_TANSFER_LENGTH * j + k] = buf[k + 1];
-				//printk("0x%02X, 0x%04X\n", buf[k+1], (XDATA_SECTOR_SIZE*i + I2C_TANSFER_LENGTH*j + k));
+			for (k = 0; k < BUS_TRANSFER_LENGTH; k++) {
+				xdata_tmp[XDATA_SECTOR_SIZE * i + BUS_TRANSFER_LENGTH * j + k] = buf[k + 1];
+				//printk("0x%02X, 0x%04X\n", buf[k+1], (XDATA_SECTOR_SIZE*i + BUS_TRANSFER_LENGTH*j + k));
 			}
 		}
 		//printk("addr=0x%05X\n", (head_addr+XDATA_SECTOR_SIZE*i));
@@ -437,21 +146,18 @@ void nvt_kit_read_mdata(uint32_t xdata_addr)
 	//read xdata : step2
 	if (residual_len != 0) {
 		//---change xdata index---
-		buf[0] = 0xFF;
-		buf[1] = ((xdata_addr + data_len - residual_len) >> 16)& 0xFF;
-		buf[2] = ((xdata_addr + data_len - residual_len) >> 8) & 0xFF;
-		novatek_ts_kit_i2c_write(nvt_ts->client, I2C_FW_Address, buf, 3);
+		nvt_set_page(I2C_FW_Address, xdata_addr + data_len - residual_len);
 
-		//---read xdata by I2C_TANSFER_LENGTH
-		for (j = 0; j < (residual_len / I2C_TANSFER_LENGTH + 1); j++) {
+		//---read xdata by BUS_TRANSFER_LENGTH
+		for (j = 0; j < (residual_len / BUS_TRANSFER_LENGTH + 1); j++) {
 			//---read data---
-			buf[0] = I2C_TANSFER_LENGTH * j;
-			novatek_ts_kit_i2c_read(nvt_ts->client, I2C_FW_Address, buf, I2C_TANSFER_LENGTH + 1);
+			buf[0] = BUS_TRANSFER_LENGTH * j;
+			CTP_I2C_READ(ts->client, I2C_FW_Address, buf, BUS_TRANSFER_LENGTH + 1);
 
 			//---copy buf to xdata_tmp---
-			for (k = 0; k < I2C_TANSFER_LENGTH; k++) {
-				xdata_tmp[(dummy_len + data_len - residual_len) + I2C_TANSFER_LENGTH * j + k] = buf[k + 1];
-				//printk("0x%02X, 0x%04x\n", buf[k+1], ((dummy_len+data_len-residual_len) + I2C_TANSFER_LENGTH*j + k));
+			for (k = 0; k < BUS_TRANSFER_LENGTH; k++) {
+				xdata_tmp[(dummy_len + data_len - residual_len) + BUS_TRANSFER_LENGTH * j + k] = buf[k + 1];
+				//printk("0x%02X, 0x%04x\n", buf[k+1], ((dummy_len+data_len-residual_len) + BUS_TRANSFER_LENGTH*j + k));
 			}
 		}
 		//printk("addr=0x%05X\n", (xdata_addr+data_len-residual_len));
@@ -459,32 +165,26 @@ void nvt_kit_read_mdata(uint32_t xdata_addr)
 
 	//---remove dummy data and 2bytes-to-1data---
 	for (i = 0; i < (data_len / 2); i++) {
-		xdata[i] = (xdata_tmp[dummy_len + i * 2] + 256 * xdata_tmp[dummy_len + i * 2 + 1]);
+		xdata[i] = (int16_t)(xdata_tmp[dummy_len + i * 2] + 256 * xdata_tmp[dummy_len + i * 2 + 1]);
 	}
 
 #if TOUCH_KEY_NUM > 0
-		//read button xdata : step3
-		//---change xdata index---
-		buf[0] = 0xFF;
-		buf[1] = (xdata_btn_addr >> 16);
-		buf[2] = ((xdata_btn_addr >> 8) & 0xFF);
-		CTP_I2C_WRITE(nvt_ts->client, I2C_FW_Address, buf, 3);
+	//read button xdata : step3
+	//---change xdata index---
+	nvt_set_page(I2C_FW_Address, xdata_btn_addr);
 
-		//---read data---
-		buf[0] = (xdata_btn_addr & 0xFF);
-		CTP_I2C_READ(nvt_ts->client, I2C_FW_Address, buf, (TOUCH_KEY_NUM * 2 + 1));
+	//---read data---
+	buf[0] = (xdata_btn_addr & 0xFF);
+	CTP_I2C_READ(ts->client, I2C_FW_Address, buf, (TOUCH_KEY_NUM * 2 + 1));
 
-		//---2bytes-to-1data---
-		for (i = 0; i < TOUCH_KEY_NUM; i++) {
-			xdata[x_num * y_num + i] = (buf[1 + i * 2] + 256 * buf[1 + i * 2 + 1]);
-		}
+	//---2bytes-to-1data---
+	for (i = 0; i < TOUCH_KEY_NUM; i++) {
+		xdata[ts->x_num * ts->y_num + i] = (int16_t)(buf[1 + i * 2] + 256 * buf[1 + i * 2 + 1]);
+	}
 #endif
 
-	//---set xdata index to 0x11E00---
-	buf[0] = 0xFF;
-	buf[1] = (nvt_ts->mmap->EVENT_BUF_ADDR >> 16) & 0xFF;
-	buf[2] = (nvt_ts->mmap->EVENT_BUF_ADDR >> 8) & 0xFF;
-	novatek_ts_kit_i2c_write(nvt_ts->client, I2C_FW_Address, buf, 3);
+	//---set xdata index to EVENT BUF ADDR---
+	nvt_set_page(I2C_FW_Address, ts->mmap->EVENT_BUF_ADDR);
 }
 
 /*******************************************************
@@ -494,11 +194,11 @@ Description:
 return:
     n.a.
 *******************************************************/
-void nvt_kit_get_mdata(int32_t *buf, uint8_t *m_x_num, uint8_t *m_y_num)
+void nvt_get_mdata(int32_t *buf, uint8_t *m_x_num, uint8_t *m_y_num)
 {
-    *m_x_num = x_num;
-    *m_y_num = y_num;
-    memcpy(buf, xdata, (x_num * y_num * 4));
+    *m_x_num = ts->x_num;
+    *m_y_num = ts->y_num;
+    memcpy(buf, xdata, ((ts->x_num * ts->y_num + TOUCH_KEY_NUM) * sizeof(int32_t)));
 }
 
 /*******************************************************
@@ -510,7 +210,7 @@ return:
 *******************************************************/
 static int32_t c_fw_version_show(struct seq_file *m, void *v)
 {
-	seq_printf(m, "nvt_fw_ver=%d, x_num=%d, y_num=%d, button_num=%d\n", nvt_fw_ver, x_num, y_num, button_num);
+	seq_printf(m, "fw_ver=%d, x_num=%d, y_num=%d, button_num=%d\n", ts->fw_ver, ts->x_num, ts->y_num, ts->max_button_num);
 	return 0;
 }
 
@@ -527,12 +227,20 @@ static int32_t c_show(struct seq_file *m, void *v)
 	int32_t i = 0;
 	int32_t j = 0;
 
-	for (i = 0; i < y_num; i++) {
-		for (j = 0; j < x_num; j++) {
-			seq_printf(m, "%5d, ", (int16_t)xdata[i * x_num + j]);
+	for (i = 0; i < ts->y_num; i++) {
+		for (j = 0; j < ts->x_num; j++) {
+			seq_printf(m, "%5d, ", xdata[i * ts->x_num + j]);
 		}
 		seq_puts(m, "\n");
 	}
+
+#if TOUCH_KEY_NUM > 0
+	for (i = 0; i < TOUCH_KEY_NUM; i++) {
+		seq_printf(m, "%5d, ", xdata[ts->x_num * ts->y_num + i]);
+	}
+	seq_puts(m, "\n");
+#endif
+
 	seq_printf(m, "\n\n");
 	return 0;
 }
@@ -580,14 +288,14 @@ static void c_stop(struct seq_file *m, void *v)
 	return;
 }
 
-static const struct seq_operations nvt_fw_version_seq_ops = {
+const struct seq_operations nvt_fw_version_seq_ops = {
 	.start  = c_start,
 	.next   = c_next,
 	.stop   = c_stop,
 	.show   = c_fw_version_show
 };
 
-static const struct seq_operations nvt_seq_ops = {
+const struct seq_operations nvt_seq_ops = {
 	.start  = c_start,
 	.next   = c_next,
 	.stop   = c_stop,
@@ -604,9 +312,24 @@ return:
 *******************************************************/
 static int32_t nvt_fw_version_open(struct inode *inode, struct file *file)
 {
+	if (mutex_lock_interruptible(&ts->lock)) {
+		return -ERESTARTSYS;
+	}
 
-	if (nvt_kit_get_fw_info())
+	NVT_LOG("++\n");
+
+#if NVT_TOUCH_ESD_PROTECT
+	nvt_esd_check_enable(false);
+#endif /* #if NVT_TOUCH_ESD_PROTECT */
+
+	if (nvt_get_fw_info()) {
+		mutex_unlock(&ts->lock);
 		return -EAGAIN;
+	}
+
+	mutex_unlock(&ts->lock);
+
+	NVT_LOG("--\n");
 
 	return seq_open(file, &nvt_fw_version_seq_ops);
 }
@@ -628,21 +351,40 @@ return:
 *******************************************************/
 static int32_t nvt_baseline_open(struct inode *inode, struct file *file)
 {
+	if (mutex_lock_interruptible(&ts->lock)) {
+		return -ERESTARTSYS;
+	}
 
-	if (nvt_kit_clear_fw_status())
+	NVT_LOG("++\n");
+
+#if NVT_TOUCH_ESD_PROTECT
+	nvt_esd_check_enable(false);
+#endif /* #if NVT_TOUCH_ESD_PROTECT */
+
+	if (nvt_clear_fw_status()) {
+		mutex_unlock(&ts->lock);
 		return -EAGAIN;
+	}
 
-	nvt_kit_change_mode(TEST_MODE_2);
+	nvt_change_mode(TEST_MODE_2);
 
-	if (nvt_kit_check_fw_status())
+	if (nvt_check_fw_status()) {
+		mutex_unlock(&ts->lock);
 		return -EAGAIN;
+	}
 
-	if (nvt_kit_get_fw_info())
+	if (nvt_get_fw_info()) {
+		mutex_unlock(&ts->lock);
 		return -EAGAIN;
+	}
 
-	nvt_kit_read_mdata(nvt_ts->mmap->BASELINE_ADDR);
+	nvt_read_mdata(ts->mmap->BASELINE_ADDR, ts->mmap->BASELINE_BTN_ADDR);
 
-	nvt_kit_change_mode(NORMAL_MODE);
+	nvt_change_mode(NORMAL_MODE);
+
+	mutex_unlock(&ts->lock);
+
+	NVT_LOG("--\n");
 
 	return seq_open(file, &nvt_seq_ops);
 }
@@ -664,24 +406,43 @@ return:
 *******************************************************/
 static int32_t nvt_raw_open(struct inode *inode, struct file *file)
 {
-	if (nvt_kit_clear_fw_status())
+	if (mutex_lock_interruptible(&ts->lock)) {
+		return -ERESTARTSYS;
+	}
+
+	NVT_LOG("++\n");
+
+#if NVT_TOUCH_ESD_PROTECT
+	nvt_esd_check_enable(false);
+#endif /* #if NVT_TOUCH_ESD_PROTECT */
+
+	if (nvt_clear_fw_status()) {
+		mutex_unlock(&ts->lock);
 		return -EAGAIN;
+	}
 
-	nvt_kit_change_mode(TEST_MODE_2);
+	nvt_change_mode(TEST_MODE_2);
 
-	if (nvt_kit_check_fw_status())
+	if (nvt_check_fw_status()) {
+		mutex_unlock(&ts->lock);
 		return -EAGAIN;
+	}
 
-	if (nvt_kit_get_fw_info())
+	if (nvt_get_fw_info()) {
+		mutex_unlock(&ts->lock);
 		return -EAGAIN;
+	}
 
-	if (nvt_kit_get_fw_pipe() == 0)
-		nvt_kit_read_mdata(nvt_ts->mmap->RAW_PIPE0_ADDR);
+	if (nvt_get_fw_pipe() == 0)
+		nvt_read_mdata(ts->mmap->RAW_PIPE0_ADDR, ts->mmap->RAW_BTN_PIPE0_ADDR);
 	else
-		nvt_kit_read_mdata(nvt_ts->mmap->RAW_PIPE1_ADDR);
+		nvt_read_mdata(ts->mmap->RAW_PIPE1_ADDR, ts->mmap->RAW_BTN_PIPE1_ADDR);
 
-	nvt_kit_change_mode(NORMAL_MODE);
+	nvt_change_mode(NORMAL_MODE);
 
+	mutex_unlock(&ts->lock);
+
+	NVT_LOG("--\n");
 
 	return seq_open(file, &nvt_seq_ops);
 }
@@ -703,22 +464,43 @@ return:
 *******************************************************/
 static int32_t nvt_diff_open(struct inode *inode, struct file *file)
 {
-	if (nvt_kit_clear_fw_status())
+	if (mutex_lock_interruptible(&ts->lock)) {
+		return -ERESTARTSYS;
+	}
+
+	NVT_LOG("++\n");
+
+#if NVT_TOUCH_ESD_PROTECT
+	nvt_esd_check_enable(false);
+#endif /* #if NVT_TOUCH_ESD_PROTECT */
+
+	if (nvt_clear_fw_status()) {
+		mutex_unlock(&ts->lock);
 		return -EAGAIN;
+	}
 
-	nvt_kit_change_mode(TEST_MODE_2);
+	nvt_change_mode(TEST_MODE_2);
 
-	if (nvt_kit_check_fw_status())
+	if (nvt_check_fw_status()) {
+		mutex_unlock(&ts->lock);
 		return -EAGAIN;
+	}
 
-	nvt_kit_get_fw_info();
+	if (nvt_get_fw_info()) {
+		mutex_unlock(&ts->lock);
+		return -EAGAIN;
+	}
 
-	if (nvt_kit_get_fw_pipe() == 0)
-		nvt_kit_read_mdata(nvt_ts->mmap->DIFF_PIPE0_ADDR);
+	if (nvt_get_fw_pipe() == 0)
+		nvt_read_mdata(ts->mmap->DIFF_PIPE0_ADDR, ts->mmap->DIFF_BTN_PIPE0_ADDR);
 	else
-		nvt_kit_read_mdata(nvt_ts->mmap->DIFF_PIPE1_ADDR);
+		nvt_read_mdata(ts->mmap->DIFF_PIPE1_ADDR, ts->mmap->DIFF_BTN_PIPE1_ADDR);
 
-	nvt_kit_change_mode(NORMAL_MODE);
+	nvt_change_mode(NORMAL_MODE);
+
+	mutex_unlock(&ts->lock);
+
+	NVT_LOG("--\n");
 
 	return seq_open(file, &nvt_seq_ops);
 }
@@ -739,40 +521,75 @@ Description:
 return:
 	Executive outcomes. 0---succeed. -12---failed.
 *******************************************************/
-int32_t nvt_kit_extra_proc_init(void)
+int32_t nvt_extra_proc_init(void)
 {
 	NVT_proc_fw_version_entry = proc_create(NVT_FW_VERSION, 0444, NULL,&nvt_fw_version_fops);
 	if (NVT_proc_fw_version_entry == NULL) {
-		TS_LOG_ERR("%s: create proc/nvt_fw_version Failed!\n", __func__);
+		NVT_ERR("create proc/%s Failed!\n", NVT_FW_VERSION);
 		return -ENOMEM;
 	} else {
-		TS_LOG_INFO("%s: create proc/nvt_fw_version Succeeded!\n", __func__);
+		NVT_LOG("create proc/%s Succeeded!\n", NVT_FW_VERSION);
 	}
 
 	NVT_proc_baseline_entry = proc_create(NVT_BASELINE, 0444, NULL,&nvt_baseline_fops);
 	if (NVT_proc_baseline_entry == NULL) {
-		TS_LOG_ERR("%s: create proc/nvt_baseline Failed!\n", __func__);
+		NVT_ERR("create proc/%s Failed!\n", NVT_BASELINE);
 		return -ENOMEM;
 	} else {
-		TS_LOG_INFO("%s: create proc/nvt_baseline Succeeded!\n", __func__);
+		NVT_LOG("create proc/%s Succeeded!\n", NVT_BASELINE);
 	}
 
 	NVT_proc_raw_entry = proc_create(NVT_RAW, 0444, NULL,&nvt_raw_fops);
 	if (NVT_proc_raw_entry == NULL) {
-		TS_LOG_ERR("%s: create proc/nvt_raw Failed!\n", __func__);
+		NVT_ERR("create proc/%s Failed!\n", NVT_RAW);
 		return -ENOMEM;
 	} else {
-		TS_LOG_INFO("%s: create proc/nvt_raw Succeeded!\n", __func__);
+		NVT_LOG("create proc/%s Succeeded!\n", NVT_RAW);
 	}
 
 	NVT_proc_diff_entry = proc_create(NVT_DIFF, 0444, NULL,&nvt_diff_fops);
 	if (NVT_proc_diff_entry == NULL) {
-		TS_LOG_ERR("%s: create proc/nvt_diff Failed!\n", __func__);
+		NVT_ERR("create proc/%s Failed!\n", NVT_DIFF);
 		return -ENOMEM;
 	} else {
-		TS_LOG_INFO("%s: create proc/nvt_diff Succeeded!\n", __func__);
+		NVT_LOG("create proc/%s Succeeded!\n", NVT_DIFF);
 	}
 
 	return 0;
+}
+
+/*******************************************************
+Description:
+	Novatek touchscreen extra function proc. file node
+	deinitial function.
+
+return:
+	n.a.
+*******************************************************/
+void nvt_extra_proc_deinit(void)
+{
+	if (NVT_proc_fw_version_entry != NULL) {
+		remove_proc_entry(NVT_FW_VERSION, NULL);
+		NVT_proc_fw_version_entry = NULL;
+		NVT_LOG("Removed /proc/%s\n", NVT_FW_VERSION);
+	}
+
+	if (NVT_proc_baseline_entry != NULL) {
+		remove_proc_entry(NVT_BASELINE, NULL);
+		NVT_proc_baseline_entry = NULL;
+		NVT_LOG("Removed /proc/%s\n", NVT_BASELINE);
+	}
+
+	if (NVT_proc_raw_entry != NULL) {
+		remove_proc_entry(NVT_RAW, NULL);
+		NVT_proc_raw_entry = NULL;
+		NVT_LOG("Removed /proc/%s\n", NVT_RAW);
+	}
+
+	if (NVT_proc_diff_entry != NULL) {
+		remove_proc_entry(NVT_DIFF, NULL);
+		NVT_proc_diff_entry = NULL;
+		NVT_LOG("Removed /proc/%s\n", NVT_DIFF);
+	}
 }
 #endif

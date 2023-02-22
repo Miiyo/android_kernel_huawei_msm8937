@@ -1,4 +1,10 @@
-obj-$(CONFIG_NOVATEK_TS_KIT) += novatek_ts.o
-novatek_ts-objs += nt36xxx_ops.o nt36xxx_ext_proc.o nt36xxx_fw_update.o nt36xxx_mp_ctrlram.o
-EXTRA_CFLAGS += -Idrivers/hisi/tzdriver
-EXTRA_CFLAGS += -Idrivers/tzdriver
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Makefile for the Novatek NT36xxx touchscreen driver.
+#
+
+# Each configuration option enables a list of files.
+
+obj-$(CONFIG_TOUCHSCREEN_NT36XXX) += nvt_36xxx.o
+
+nvt_36xxx-y := nt36xxx.o nt36xxx_fw_update.o nt36xxx_ext_proc.o nt36xxx_mp_ctrlram.o
