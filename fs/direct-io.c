@@ -38,6 +38,7 @@
 #include <linux/atomic.h>
 #include <linux/prefetch.h>
 #include <linux/aio.h>
+#include <linux/iolimit_cgroup.h>
 
 /*
  * How many user pages to map in one call to get_user_pages().  This determines
@@ -930,7 +931,13 @@ static int do_direct_IO(struct dio *dio, struct dio_submit *sdio,
 		from = sdio->head ? 0 : sdio->from;
 		to = (sdio->head == sdio->tail - 1) ? sdio->to : PAGE_SIZE;
 		sdio->head++;
-
+#ifdef CONFIG_CGROUP_IOLIMIT
+		if ((dio->rw & WRITE) == WRITE) {
+			io_write_bandwidth_control(PAGE_SIZE);
+		} else {
+			io_read_bandwidth_control(PAGE_SIZE);
+		}
+#endif
 		while (from < to) {
 			unsigned this_chunk_bytes;	/* # of bytes mapped */
 			unsigned this_chunk_blocks;	/* # of blocks */
