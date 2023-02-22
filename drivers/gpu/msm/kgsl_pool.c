@@ -87,6 +87,7 @@ _kgsl_pool_add_page(struct kgsl_page_pool *pool, struct page *p)
 
 	spin_lock(&pool->list_lock);
 	list_add_tail(&p->lru, &pool->page_list);
+	zone_page_state_add(1, page_zone(p), NR_GPU_PAGES);
 	pool->page_count++;
 	spin_unlock(&pool->list_lock);
 }
@@ -100,6 +101,7 @@ _kgsl_pool_get_page(struct kgsl_page_pool *pool)
 	spin_lock(&pool->list_lock);
 	if (pool->page_count) {
 		p = list_first_entry(&pool->page_list, struct page, lru);
+		zone_page_state_add(-1, page_zone(p), NR_GPU_PAGES);
 		pool->page_count--;
 		list_del(&p->lru);
 	}
