@@ -61,6 +61,10 @@ static struct rtc_device	*rtcdev;
 static DEFINE_SPINLOCK(rtcdev_lock);
 static struct mutex power_on_alarm_lock;
 
+#ifdef CONFIG_HUAWEI_KERNEL
+#define ALARM_DELTA 60
+#endif
+
 /**
  * set_power_on_alarm - set power on alarm value into rtc register
  *
@@ -113,7 +117,11 @@ void set_power_on_alarm(void)
 	rtc_read_time(rtc, &rtc_time);
 	rtc_tm_to_time(&rtc_time, &rtc_secs);
 	alarm_delta = wall_time.tv_sec - rtc_secs;
+	#ifdef CONFIG_HUAWEI_KERNEL
+	alarm_time = alarm_secs - alarm_delta - ALARM_DELTA;
+	#else
 	alarm_time = alarm_secs - alarm_delta;
+	#endif
 
 	rtc_time_to_tm(alarm_time, &alarm.time);
 	alarm.enabled = 1;
