@@ -57,7 +57,9 @@
 #include "mdss_smmu.h"
 
 #include "mdss_mdp_trace.h"
-
+#ifdef CONFIG_LCDKIT_DRIVER
+#include <linux/lcdkit_dsm.h>
+#endif
 #define AXI_HALT_TIMEOUT_US	0x4000
 #define AUTOSUSPEND_TIMEOUT_MS	200
 #define DEFAULT_MDP_PIPE_WIDTH	2048
@@ -1488,6 +1490,12 @@ void mdss_mdp_clk_ctrl(int enable)
 				changed++;
 		} else {
 			pr_err("Can not be turned off\n");
+#ifdef CONFIG_HUAWEI_DSM
+			/* report mdp clk dsm error */
+			#ifdef CONFIG_LCDKIT_DRIVER
+			lcdkit_report_dsm_err(DSM_LCD_MDSS_MDP_CLK_ERROR_NO,0,0,0);
+			#endif
+#endif
 		}
 	}
 
@@ -1594,7 +1602,12 @@ static int mdss_mdp_gdsc_notifier_call(struct notifier_block *self,
 
 	mdata = container_of(self, struct mdss_data_type, gdsc_cb);
 
+#ifdef CONFIG_LCDKIT_DRIVER
+	if (!mdss_mdp_req_init_restore_cfg(mdata) &&
+		(event & REGULATOR_EVENT_ENABLE)) {
+#else
 	if (event & REGULATOR_EVENT_ENABLE) {
+#endif
 		/*
 		 * As SMMU in low tier targets is not power collapsible,
 		 * hence we don't need to restore sec configuration.
@@ -2382,6 +2395,14 @@ ssize_t mdss_mdp_show_capabilities(struct device *dev,
 	if (mdata->clk_factor.numer)
 		SPRINT("clk_fudge_factor=%u,%u\n", mdata->clk_factor.numer,
 			mdata->clk_factor.denom);
+	if (mdata->has_rot_dwnscale) {
+		if (mdata->rot_dwnscale_min)
+			SPRINT("rot_dwnscale_min=%u\n",
+				mdata->rot_dwnscale_min);
+		if (mdata->rot_dwnscale_max)
+			SPRINT("rot_dwnscale_max=%u\n",
+				mdata->rot_dwnscale_max);
+	}
 	SPRINT("features=");
 	if (mdata->has_bwc)
 		SPRINT(" bwc");
@@ -4146,6 +4167,19 @@ static int mdss_mdp_parse_dt_misc(struct platform_device *pdev)
 		 "qcom,mdss-traffic-shaper-enabled");
 	mdata->has_rot_dwnscale = of_property_read_bool(pdev->dev.of_node,
 		"qcom,mdss-has-rotator-downscale");
+	if (mdata->has_rot_dwnscale) {
+		rc = of_property_read_u32(pdev->dev.of_node,
+			"qcom,mdss-rot-downscale-min",
+			&mdata->rot_dwnscale_min);
+		if (rc)
+			pr_err("Min rotator downscale property not specified\n");
+
+		rc = of_property_read_u32(pdev->dev.of_node,
+			"qcom,mdss-rot-downscale-max",
+			&mdata->rot_dwnscale_max);
+		if (rc)
+			pr_err("Max rotator downscale property not specified\n");
+	}
 
 	rc = of_property_read_u32(pdev->dev.of_node,
 		"qcom,mdss-dram-channels", &mdata->bus_channels);
