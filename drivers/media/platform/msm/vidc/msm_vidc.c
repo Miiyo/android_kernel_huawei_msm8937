@@ -1305,7 +1305,7 @@ static void cleanup_instance(struct msm_vidc_inst *inst)
 			msm_comm_smem_free(inst, inst->extradata_handle);
 
 		mutex_lock(&inst->pending_getpropq.lock);
-		if (!list_empty(&inst->pending_getpropq.list)) {
+		if (!list_empty(&inst->pending_getpropq.list)&& (msm_vidc_debug & VIDC_INFO)) {
 			dprintk(VIDC_ERR,
 				"pending_getpropq not empty\n");
 			WARN_ON(VIDC_DBG_WARN_ENABLE);
