@@ -186,7 +186,7 @@ void save_modem_reset_log(char reason[])
 
 	insert_modem_log_queue();
 	pr_info("[log_modem_reset]put done \n");
-    return 0;
+    return;
 }
 
 
