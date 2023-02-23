@@ -123,12 +123,12 @@ static int insert_modem_log_queue(void)
 {
     if(NULL == g_work_data->log_modem_work_queue){
         pr_err("[log_modem_reset]log_modem_reset_work_queue is NULL!\n");
-        return;
+        return 0;
     }
 
     pr_info("[log_modem_reset]modem reset reason inserted the log_modem_reset_queue \n");
     queue_work(g_work_data->log_modem_work_queue, &(g_work_data->log_modem_work));
-    return;
+    return 0;
 }
 
 static void save_modem_err_log(int type)
