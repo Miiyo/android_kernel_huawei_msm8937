@@ -709,7 +709,7 @@ static void bq2415x_reset_chip(struct bq2415x_device *bq)
 {
 	if (!bq) {
 		pr_err("%s: INvalid param, fatal error\n", __func__);
-		return -EINVAL;
+		return;
 	}
     /* unlimit safe charge current and voltage */
     bq2415x_i2c_write(bq, BQ2415X_REG_SAFE, BQ2415X_SAFE_UNLIMIT);
@@ -1365,7 +1365,7 @@ static void bq2415x_iusb_work(struct work_struct *work)
 
 	if (!work) {
 		pr_err("%s: Invalid param, fatal error\n", __func__);
-		return -EINVAL;
+		return;
 	}
 
 	bq = container_of(work, struct bq2415x_device, iusb_work);
@@ -1726,7 +1726,7 @@ static void bq2415x_usb_low_power_work(struct work_struct *work)
 
 	if (!work) {
 		pr_err("%s: Invalid param, fatal error\n", __func__);
-		return -EINVAL;
+		return;
 	}
 
 	bq = container_of(work, struct bq2415x_device, lower_power_charger_work.work);
@@ -2589,7 +2589,7 @@ static void bq2415x_power_supply_exit(struct bq2415x_device *bq)
 {
 	if(NULL == bq) {
 		pr_err("bq2415x_power_supply_exit: bq is NULL\n");
-		return -EINVAL;
+		return;
 	} 
 
 	bq->autotimer = 0;
@@ -3208,7 +3208,7 @@ static void bq2415x_sysfs_exit(struct bq2415x_device *bq)
 {
 	if (!bq) {
 		pr_err("%s: Invalid param, fatal error\n", __func__);
-		return -EINVAL;
+		return;
 	}
 	sysfs_remove_group(&bq->batt_psy.dev->kobj, &bq2415x_sysfs_attr_group);
 }

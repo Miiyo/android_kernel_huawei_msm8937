@@ -1293,7 +1293,7 @@ static void cw_chg_full_and_rechg_poll(struct cw_battery *cw_bms)
 
     if (!cw_bms) {
         pr_err("%s: invalid param, fatal error\n", __func__);
-        return -EINVAL;
+        return;
     }
 
     /*get usb_psy*/
