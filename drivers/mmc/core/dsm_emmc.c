@@ -434,7 +434,7 @@ static mmc_dsm_request_response_error_check(struct mmc_host *host, struct mmc_re
 			u8 *ext_csd;
 			ext_csd = kzalloc(512, GFP_KERNEL);
 			if (!ext_csd)
-				return;
+				return 0;
 			err = mmc_send_ext_csd(host->card, ext_csd);
 			if (err)
 				goto free;
