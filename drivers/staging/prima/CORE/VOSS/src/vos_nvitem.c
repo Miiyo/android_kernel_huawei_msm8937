@@ -1142,7 +1142,9 @@ VOS_STATUS vos_nv_parseV2bin(tANI_U8 *pnvEncodedBuf, tANI_U32 nvReadBufSize,
 
    return VOS_STATUS_SUCCESS;
 }
-
+#ifdef CONFIG_HUAWEI_WIFI
+extern VOS_STATUS vos_auto_nvbin_load(v_VOID_t *pHDDContext,v_VOID_t **pnvtmpBuf,v_SIZE_t *nvReadBufSize);
+#endif
 /**------------------------------------------------------------------------
   \brief vos_nv_open() - Open NV operation
          Read NV bin file and prepare NV common structure
@@ -1168,7 +1170,13 @@ VOS_STATUS vos_nv_open(void)
     {
         return (eHAL_STATUS_FAILURE);
     }
-
+#ifdef CONFIG_HUAWEI_WIFI
+    status = vos_auto_nvbin_load(((VosContextType*)(pVosContext))->pHDDContext,(v_VOID_t**)&pnvtmpBuf,&nvReadBufSize);
+    if (!VOS_IS_STATUS_SUCCESS( status ))
+    {
+        return VOS_STATUS_E_RESOURCES;
+    }
+#else
     status = hdd_request_firmware(WLAN_NV_FILE,
                                   ((VosContextType*)(pVosContext))->pHDDContext,
                                   (v_VOID_t**)&pnvtmpBuf, &nvReadBufSize);
@@ -1180,6 +1188,7 @@ VOS_STATUS vos_nv_open(void)
                    __func__, WLAN_NV_FILE);
        return VOS_STATUS_E_RESOURCES;
     }
+#endif
 
     pnvEncodedBuf = (v_U8_t *)vos_mem_vmalloc(nvReadBufSize);
 

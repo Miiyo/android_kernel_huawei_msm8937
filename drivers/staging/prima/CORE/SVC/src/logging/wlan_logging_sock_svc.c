@@ -1178,6 +1178,7 @@ static int wlan_logging_thread(void *Arg)
 		}
 
 		if (gwlan_logging.exit) {
+		    pr_err("dbg: %s: break from loop", __func__);
 		    break;
 		}
 
@@ -1263,7 +1264,9 @@ static int wlan_logging_thread(void *Arg)
 		}
 	}
 
-	complete_and_exit(&gwlan_logging.shutdown_comp, 0);
+	complete(&gwlan_logging.shutdown_comp);
+	pr_err("dbg: %s: exit comp:%d exit: %d", __func__, gwlan_logging.shutdown_comp.done, gwlan_logging.exit);
+	do_exit(0);
 
 	return 0;
 }
@@ -1567,6 +1570,7 @@ int wlan_logging_sock_deactivate_svc(void)
 	unsigned long irq_flag;
 	int i;
 
+	pr_err("dbg: %s: enter %p", __func__, gplog_msg);
 	if (!gplog_msg)
 		return 0;
 
@@ -1574,11 +1578,15 @@ int wlan_logging_sock_deactivate_svc(void)
 	clear_default_logtoapp_log_level();
 	gapp_pid = INVALID_PID;
 
+	pr_err("dbg: %s: init comp", __func__);
 	INIT_COMPLETION(gwlan_logging.shutdown_comp);
+	/*Make sure no write reorder.*/
+	wmb();
 	gwlan_logging.exit = true;
 	gwlan_logging.is_active = false;
 	vos_set_multicast_logging(0);
 	wake_up_interruptible(&gwlan_logging.wait_queue);
+	pr_err("dbg: %s: logging.exit %d", __func__, gwlan_logging.exit);
 	wait_for_completion(&gwlan_logging.shutdown_comp);
 
 	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
@@ -1602,7 +1610,7 @@ int wlan_logging_sock_deactivate_svc(void)
 	spin_unlock_irqrestore(&gwlan_logging.pkt_stats_lock, irq_flag);
 
 	wlan_logging_flush_pkt_queue();
-
+	pr_err("dbg: %s: exit", __func__);
 	return 0;
 }
 

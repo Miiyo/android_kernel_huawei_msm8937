@@ -833,7 +833,7 @@ VOS_STATUS vos_start( v_CONTEXT_t vosContext )
   pVosContextType pVosContext = (pVosContextType)vosContext;
   tHalMacStartParameters halStartParams;
   hdd_context_t *pHddCtx = NULL;
-
+  pr_info("wlan: enter vos_start\n");
   VOS_TRACE(VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
             "%s: Starting Libra SW", __func__);
 
@@ -981,7 +981,7 @@ VOS_STATUS vos_start( v_CONTEXT_t vosContext )
             "TL correctly started");
   VOS_TRACE( VOS_MODULE_ID_VOSS, VOS_TRACE_LEVEL_INFO,
             "%s: VOSS Start is successful!!", __func__);
-
+  pr_info("wlan: exit vos_start\n");
   return VOS_STATUS_SUCCESS;
 
 

@@ -1,5 +1,16 @@
-# Android makefile for the WLAN Module
+ifeq ($(CONFIG_HUAWEI_ANDROID_WIFI_BUILTIN),true)
+$(warning CONFIG_HUAWEI_WIFI_BUILTIN)
+# Determine if we are Proprietary or Open Source
+ifeq ($(findstring opensource,$(LOCAL_PATH)),)
+$(shell mkdir -p $(TARGET_OUT_ETC)/firmware/wlan/prima)
+$(shell rm -f $(TARGET_OUT_ETC)/firmware/wlan/prima/WCNSS_cfg.dat)
+#$(shell cp $(LOCAL_PATH)/firmware_bin/WCNSS_cfg.dat $(TARGET_OUT_ETC)/firmware/wlan/prima)
+$(shell cp $(WLAN_ROOT)/firmware_bin/WCNSS_cfg.dat $(TARGET_OUT_ETC)/firmware/wlan/prima)
+endif
 
+else
+# Android makefile for the WLAN Module
+$(warning CONFIG_HUAWEI_WIFI_BUILTKO)
 # Assume no targets will be supported
 WLAN_CHIPSET :=
 
@@ -154,3 +165,4 @@ endif # PRODUCT_VENDOR_MOVE_ENABLED
 endif # DLKM check
 
 endif # supported target check
+endif # CONFIG_HUAWEI_WIFI_BUILTIN

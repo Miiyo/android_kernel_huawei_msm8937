@@ -530,7 +530,9 @@ WLANTL_GetEtherType
   v_U16_t              * usEtherType
 );
 
-
+#ifdef CONFIG_WIFI_WAKE_SRC
+extern volatile bool g_wifi_firstwake;
+#endif
 /*----------------------------------------------------------------------------
  * Externalized Function Definitions
 * -------------------------------------------------------------------------*/
@@ -6309,6 +6311,13 @@ WLANTL_RxFrames
 
     if ( WLANTL_IS_MGMT_FRAME(ucFrmType))
     {
+#ifdef CONFIG_WIFI_WAKE_SRC
+		if(g_wifi_firstwake){
+		TLLOG2(VOS_TRACE( VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_ERROR,
+                 "management frame, type is %d",ucFrmType&0xF));
+		   g_wifi_firstwake = FALSE;
+	    }
+#endif
       TLLOG2(VOS_TRACE( VOS_MODULE_ID_TL, VOS_TRACE_LEVEL_INFO_HIGH,
                  "WLAN TL:Sending packet to management client"));
       if ( VOS_STATUS_SUCCESS != vos_pkt_flatten_rx_pkt(&vosTempBuff))

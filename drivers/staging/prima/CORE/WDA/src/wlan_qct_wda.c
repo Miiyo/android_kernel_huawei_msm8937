@@ -13156,7 +13156,7 @@ VOS_STATUS WDA_NVDownload_Start(v_PVOID_t pVosContext)
    WDI_Status status = WDI_STATUS_E_FAILURE;
    WDI_NvDownloadReqParamsType * wdiNvDownloadReqParam =NULL;
    tWDA_ReqParams *pWdaParams ;
-
+   pr_info("wlan: enter WDA_NVDownload_Start\n");
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                                           "------> %s " ,__func__);
    if (NULL == pWDA)
@@ -13211,6 +13211,7 @@ VOS_STATUS WDA_NVDownload_Start(v_PVOID_t pVosContext)
       vos_mem_free(pWdaParams->wdaWdiApiMsgParam) ;
       vos_mem_free(pWdaParams);
    }
+   pr_info("wlan: exit WDA_NVDownload_Start\n");
    return CONVERT_WDI2VOS_STATUS(status) ;
 }
 /*

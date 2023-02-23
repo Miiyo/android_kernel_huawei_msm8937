@@ -65,6 +65,9 @@
 #include  "sapInternal.h"
 #include  "wlan_hdd_trace.h"
 #include  "wlan_qct_wda.h"
+#ifdef CONFIG_WIFI_WAKE_SRC
+#include "hw_wifi.h"
+#endif
 /*--------------------------------------------------------------------------- 
   Preprocessor definitions and constants
   -------------------------------------------------------------------------*/ 
@@ -791,7 +794,9 @@ void hdd_dump_dhcp_pkt(struct sk_buff *skb, int path)
 
     return NETDEV_TX_OK;
  }
-
+#ifdef CONFIG_HUAWEI_WIFI
+ #define PKTMARK(p)                     (((struct sk_buff *)(p))->mark)
+#endif
 /**============================================================================
   @brief __hdd_hard_start_xmit() - Function registered with the Linux OS for
   transmitting packets. There are 2 versions of this function. One that uses
@@ -1000,7 +1005,11 @@ int __hdd_hard_start_xmit(struct sk_buff *skb, struct net_device *dev)
 
    //Stick the User Priority inside this node
    pktNode->userPriority = up;
-
+#ifdef CONFIG_HUAWEI_WIFI
+   if (PKTMARK(skb) == 0x5a){
+       pktNode->userPriority = SME_QOS_WMM_UP_VO;
+   }
+#endif
 
    INIT_LIST_HEAD(&pktNode->anchor);
 
@@ -2851,6 +2860,12 @@ VOS_STATUS hdd_rx_packet_cbk( v_VOID_t *vosContext,
       skb->dev = pAdapter->dev;
       skb->protocol = eth_type_trans(skb, skb->dev);
       skb->ip_summed = CHECKSUM_NONE;
+#ifdef CONFIG_WIFI_WAKE_SRC
+	  if(g_wifi_firstwake){
+	      parse_packet(skb);
+	      g_wifi_firstwake = FALSE;
+	  }
+#endif
       ++pAdapter->hdd_stats.hddTxRxStats.rxPackets;
       ++pAdapter->stats.rx_packets;
       pAdapter->stats.rx_bytes += skb->len;

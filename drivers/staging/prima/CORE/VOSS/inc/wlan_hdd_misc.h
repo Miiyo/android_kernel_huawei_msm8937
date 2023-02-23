@@ -30,10 +30,21 @@
 
 #ifdef MSM_PLATFORM
 #ifdef QC_WLAN_CHIPSET_PRIMA
+#ifdef CONFIG_HUAWEI_WIFI
+#define WLAN_INI_FILE              "../../vendor/etc/wifi/WCNSS_qcom_cfg.ini"
+#define WLAN_CFG_FILE              "wlan/prima/WCNSS_cfg.dat"
+#define WLAN_FW_FILE               ""
+#define WLAN_NV_FILE               "load/WCNSS_hw_wlan_nv.bin"
+#define HWCUST_WLAN_CAL_NV_FILE    "../../persist/WCNSS_hw_cal_wlan_nv.bin"
+#define HW_WLAN_NV_FILE            "../wifi/WCNSS_hw_wlan_nv.bin"
+#define NVBIN_FILE_QCOM_DEFAULT    "wlan/prima/WCNSS_qcom_wlan_nv.bin"
+#define NVBIN_PATH_LENTH           70
+#else
 #define WLAN_INI_FILE              "wlan/prima/WCNSS_qcom_cfg.ini"
 #define WLAN_CFG_FILE              "wlan/prima/WCNSS_cfg.dat"
 #define WLAN_FW_FILE               ""
 #define WLAN_NV_FILE               "wlan/prima/WCNSS_qcom_wlan_nv.bin"
+#endif /* CONFIG_HUAWEI_WIFI */
 #define WLAN_DICT_FILE             "wlan/prima/WCNSS_wlan_dictionary.dat"
 #define WLAN_COUNTRY_INFO_FILE     "wlan/prima/WCNSS_wlan_country_info.dat"
 #define WLAN_HO_CFG_FILE           "wlan/prima/WCNSS_wlan_ho_config"
@@ -56,14 +67,6 @@
 #define WLAN_HO_CFG_FILE           "wlan/wlan_ho_config"
 #endif // MSM_PLATFORM
 
-#define WLAN_MAC_FILE              "wlan/prima/wlan_mac.bin"
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
-#undef WLAN_NV_FILE
-#define WLAN_NV_FILE hdd_get_nv_bin()
-
-char* hdd_get_nv_bin(void);
-#endif
 
 VOS_STATUS hdd_request_firmware(char *pfileName,v_VOID_t *pCtx,v_VOID_t **ppfw_data, v_SIZE_t *pSize);
 
@@ -72,15 +75,6 @@ VOS_STATUS hdd_release_firmware(char *pFileName,v_VOID_t *pCtx);
 VOS_STATUS hdd_get_cfg_file_size(v_VOID_t *pCtx, char *pFileName, v_SIZE_t *pBufSize);
 
 VOS_STATUS hdd_read_cfg_file(v_VOID_t *pCtx, char *pFileName, v_VOID_t *pBuffer, v_SIZE_t *pBufSize);
-#if 0
-
-VOS_STATUS hdd_release_firmware(char *pFileName,v_VOID_t *pCtx);
-
-VOS_STATUS hdd_get_cfg_file_size(v_VOID_t *pCtx, char *pFileName, v_SIZE_t *pBufSize);
-
-VOS_STATUS hdd_read_cfg_file(v_VOID_t *pCtx, char *pFileName, v_VOID_t *pBuffer, v_SIZE_t *pBufSize);
-
-#endif
 
 tVOS_CONCURRENCY_MODE hdd_get_concurrency_mode ( void );
 

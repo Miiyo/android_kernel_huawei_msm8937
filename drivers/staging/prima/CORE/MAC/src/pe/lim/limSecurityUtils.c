@@ -501,7 +501,7 @@ limRestoreFromAuthState(tpAniSirGlobal pMac, tSirResultCodes resultCode, tANI_U1
 {
     tSirMacAddr     currentBssId;
     tLimMlmAuthCnf  mlmAuthCnf;
-
+    limLog(pMac, LOG1, FL(" ENTER "));
     vos_mem_copy( (tANI_U8 *) &mlmAuthCnf.peerMacAddr,
                   (tANI_U8 *) &pMac->lim.gpLimMlmAuthReq->peerMacAddr,
                   sizeof(tSirMacAddr));
@@ -536,11 +536,10 @@ limRestoreFromAuthState(tpAniSirGlobal pMac, tSirResultCodes resultCode, tANI_U1
     {
         pMac->lim.gLimPreAuthChannelNumber = 0;
     }
-
     if ((protStatusCode == eSIR_MAC_MAX_ASSOC_STA_REACHED_STATUS)
              && (sessionEntry->sta_auth_retries_for_code17 <
                             pMac->sta_auth_retries_for_code17)) {
-        limLog(pMac, LOG1, FL("Retry Auth "));
+        limLog(pMac, LOG1, FL("Retry Auth num = %d"), sessionEntry->sta_auth_retries_for_code17);
         limDoSendAuthMgmtFrame(pMac, sessionEntry);
         sessionEntry->sta_auth_retries_for_code17++;
     } else {

@@ -5616,8 +5616,11 @@ __wlan_hdd_cfg80211_get_supported_features(struct wiphy *wiphy,
 #endif
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
+   if ((TRUE == pHddCtx->cfg_ini->fEnableLLStats) &&
+       (TRUE == sme_IsFeatureSupportedByFW(LINK_LAYER_STATS_MEAS))) {
         fset |= WIFI_FEATURE_LINK_LAYER_STATS;
         hddLog(LOG1, FL("Link layer stats is supported by driver"));
+   }
 #endif
 
     skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, sizeof(fset) +
@@ -5867,7 +5870,7 @@ __wlan_hdd_cfg80211_get_fw_mem_dump(struct wiphy *wiphy,
        (FALSE == sme_IsFeatureSupportedByFW(MEMORY_DUMP_SUPPORTED)))
     {
        hddLog(VOS_TRACE_LEVEL_INFO, FL("FW dump Logging not supported"));
-       return -EINVAL;
+       return -EOPNOTSUPP;
     }
     /*call common API for FW mem dump req*/
     ret = wlan_hdd_fw_mem_dump_req(pHddCtx);
@@ -12072,15 +12075,23 @@ static int __wlan_hdd_cfg80211_add_key( struct wiphy *wiphy,
         return -EINVAL;
     }
 
+    if (CSR_MAX_RSC_LEN < params->seq_len)
+    {
+        hddLog(VOS_TRACE_LEVEL_ERROR,"%s: Invalid seq length %d", __func__,
+                params->seq_len);
+    }
+
     hddLog(VOS_TRACE_LEVEL_INFO,
-           "%s: called with key index = %d & key length %d",
-           __func__, key_index, params->key_len);
+           "%s: called with key index = %d & key length %d & seq length %d",
+           __func__, key_index, params->key_len, params->seq_len);
+
 
     /*extract key idx, key len and key*/
     vos_mem_zero(&setKey,sizeof(tCsrRoamSetKey));
     setKey.keyId = key_index;
     setKey.keyLength = params->key_len;
     vos_mem_copy(&setKey.Key[0],params->key, params->key_len);
+    vos_mem_copy(&setKey.keyRsc[0], params->seq, params->seq_len);
 
     switch (params->cipher)
     {
@@ -14027,7 +14038,7 @@ int __wlan_hdd_cfg80211_scan( struct wiphy *wiphy,
      * Becasue of this, driver is assuming that this is not wildcard scan and so
      * is not aging out the scan results.
      */
-    if (request->ssids && '\0' == request->ssids->ssid[0])
+    if (request->ssids && (request->n_ssids == 1) && '\0' == request->ssids->ssid[0])
     {
         request->n_ssids = 0;
     }
@@ -20167,7 +20178,7 @@ static int wlan_hdd_cfg80211_set_mac_acl(struct wiphy *wiphy,
 
     return ret;
 }
-
+#ifdef CONFIG_NL80211_TESTMODE
 #ifdef WLAN_NL80211_TESTMODE
 #ifdef FEATURE_WLAN_LPHB
 void wlan_hdd_cfg80211_lphb_ind_handler
@@ -20355,6 +20366,7 @@ static int wlan_hdd_cfg80211_testmode(struct wiphy *wiphy,
    return ret;
 }
 #endif /* CONFIG_NL80211_TESTMODE */
+#endif
 
 extern void hdd_set_wlan_suspend_mode(bool suspend);
 static int __wlan_hdd_cfg80211_dump_survey(struct wiphy *wiphy,
@@ -20792,8 +20804,10 @@ static struct cfg80211_ops wlan_hdd_cfg80211_ops =
      .resume = wlan_hdd_cfg80211_resume_wlan,
      .suspend = wlan_hdd_cfg80211_suspend_wlan,
      .set_mac_acl = wlan_hdd_cfg80211_set_mac_acl,
+#ifdef CONFIG_NL80211_TESTMODE
 #ifdef WLAN_NL80211_TESTMODE
      .testmode_cmd = wlan_hdd_cfg80211_testmode,
+#endif
 #endif
      .dump_survey = wlan_hdd_cfg80211_dump_survey,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,5,0)) || \

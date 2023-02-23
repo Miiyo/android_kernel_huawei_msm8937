@@ -107,7 +107,13 @@
 #define NV_EMBEDDED_VERSION                 0x80
 
 #define QWLAN_TXFIR_CFG_DPD_BYPASS_MASK     0x8
-
+#ifdef CONFIG_HUAWEI_WIFI
+#ifdef MODULE
+#define WLAN_MODULE_NAME  module_name(THIS_MODULE)
+#else
+#define WLAN_MODULE_NAME  "wlan"
+#endif
+#endif
 typedef struct {
    tANI_U32 tableSize;                      /* Whole NV Table Size */
    tANI_U32 chunkSize;                      /* Current Chunk Size < 2K */
@@ -1608,6 +1614,9 @@ int wlan_hdd_ftm_close(hdd_context_t *pHddCtx)
 
     hdd_adapter_t *pAdapter = hdd_get_adapter(pHddCtx,WLAN_HDD_FTM);
     ENTER();
+#ifdef CONFIG_HUAWEI_WIFI
+    pr_info("%s: wlan_hdd_ftm_close: enter: ftm_state = %d\n", WLAN_MODULE_NAME, (int)pHddCtx->ftm.ftm_state);
+#endif
     if(pAdapter == NULL)
     {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL, "%s:pAdapter is NULL",__func__);
@@ -1627,6 +1636,9 @@ int wlan_hdd_ftm_close(hdd_context_t *pHddCtx)
     {
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
                   "%s: Ftm has been started. stopping ftm", __func__);
+#ifdef CONFIG_HUAWEI_WIFI
+        pr_info("%s: wlan_ftm_stop: will enter\n", WLAN_MODULE_NAME);
+#endif
         wlan_ftm_stop(pHddCtx);
     }
 #ifdef WLAN_KD_READY_NOTIFIER
@@ -1638,6 +1650,9 @@ int wlan_hdd_ftm_close(hdd_context_t *pHddCtx)
 
     //TODO----------
     //Deregister the device with the kernel
+#ifdef CONFIG_HUAWEI_WIFI
+    pr_info("%s: hdd_UnregisterWext: will enter\n", WLAN_MODULE_NAME);
+#endif
     hdd_UnregisterWext(pAdapter->dev);
 
 #if 0
@@ -1656,7 +1671,10 @@ int wlan_hdd_ftm_close(hdd_context_t *pHddCtx)
        VOS_ASSERT( VOS_IS_STATUS_SUCCESS( vosStatus ) );
     }
 
+#ifdef CONFIG_HUAWEI_WIFI
     //Close VOSS
+    pr_info("%s: wlan_ftm_vos_close: will enter\n", WLAN_MODULE_NAME);
+#endif
     wlan_ftm_vos_close(vosContext);
     hdd_close_all_adapters( pHddCtx );
     vosStatus = vos_event_destroy(&pHddCtx->ftm.ftm_vos_event);

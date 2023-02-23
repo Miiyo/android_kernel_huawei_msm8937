@@ -9,17 +9,50 @@ endif
 ifeq ($(KERNEL_BUILD),1)
 	# These are provided in Android-based builds
 	# Need to explicitly define for Kernel-based builds
-ifeq ($(CONFIG_PRONTO_WLAN),m)
-	MODNAME := pronto_wlan
-else ifeq ($(CONFIG_PRIMA_WLAN),m)
-	MODNAME := prima_wlan
-else
 	MODNAME := wlan
-endif
 	WLAN_ROOT := drivers/staging/prima
+
+	# keep the feature the same with module build
+	# These are configurable via Kconfig for kernel-based builds
+	# Need to explicitly configure for Android-based builds
+
+	#Flag to enable BlueTooth AMP feature
+	CONFIG_PRIMA_WLAN_BTAMP := n
+
+	#Flag to enable Legacy Fast Roaming(LFR)
+	CONFIG_PRIMA_WLAN_LFR := y
+
+	#JB kernel has PMKSA patches, hence enabling this flag
+	CONFIG_PRIMA_WLAN_OKC := y
+
+	# JB kernel has CPU enablement patches, so enable
+	CONFIG_PRIMA_WLAN_11AC_HIGH_TP := y
+
+	#Flag to enable TDLS feature
+	CONFIG_QCOM_TDLS := y
+
+	#Flag to enable Fast Transition (11r) feature
+	CONFIG_QCOM_VOWIFI_11R := y
+
+	#Flag to enable Protected Managment Frames (11w) feature
+	ifneq ($(CONFIG_PRONTO_WLAN),)
+	CONFIG_WLAN_FEATURE_11W := y
+	endif
+
+	#Flag to enable new Linux Regulatory implementation
+	CONFIG_ENABLE_LINUX_REG := y
+
+	#Flag to enable offload packets feature
+	CONFIG_WLAN_OFFLOAD_PACKETS := y
+
+	#Flag to enable Legacy Fast Roaming(LFR) Make Before Break
+	CONFIG_PRIMA_WLAN_LFR_MBB := y
+
+	#Flag to enable mDNS feature
+	CONFIG_MDNS_OFFLOAD_SUPPORT := y
 endif
 
-ifeq ($(KERNEL_BUILD), 1)
+ifeq ($(KERNEL_BUILD), 0)
 # These are configurable via Kconfig for kernel-based builds
 # Need to explicitly configure for Android-based builds
 
@@ -67,13 +100,13 @@ SAP_AUTH_OFFLOAD := y
 
 # To enable CONFIG_QCOM_ESE_UPLOAD, dependent config
 # CONFIG_QCOM_ESE must be enabled.
-CONFIG_QCOM_ESE := y
-CONFIG_QCOM_ESE_UPLOAD := y
+CONFIG_QCOM_ESE := n
+CONFIG_QCOM_ESE_UPLOAD := n
 
 # Feature flags which are not (currently) configurable via Kconfig
 
 #Whether to build debug version
-BUILD_DEBUG_VERSION := 0
+BUILD_DEBUG_VERSION := 1
 
 #Enable this flag to build driver in diag version
 BUILD_DIAG_VERSION := 1
@@ -428,10 +461,10 @@ VOSS_OBJS :=    $(VOSS_SRC_DIR)/vos_api.o \
 		$(VOSS_SRC_DIR)/vos_timer.o \
 		$(VOSS_SRC_DIR)/vos_trace.o \
 		$(VOSS_SRC_DIR)/vos_types.o \
-                $(VOSS_SRC_DIR)/vos_utils.o \
-                $(VOSS_SRC_DIR)/wlan_nv_parser.o \
-                $(VOSS_SRC_DIR)/wlan_nv_stream_read.o \
-                $(VOSS_SRC_DIR)/wlan_nv_template_builtin.o
+		$(VOSS_SRC_DIR)/vos_utils.o \
+		$(VOSS_SRC_DIR)/wlan_nv_parser.o \
+		$(VOSS_SRC_DIR)/wlan_nv_stream_read.o \
+		$(VOSS_SRC_DIR)/wlan_nv_template_builtin.o
 
 ifeq ($(BUILD_DIAG_VERSION),1)
 VOSS_OBJS += $(VOSS_SRC_DIR)/vos_diag.o
@@ -505,6 +538,7 @@ WDI_OBJS :=	$(WDI_CP_OBJS) \
 RIVA_INC :=	-I$(WLAN_ROOT)/riva/inc
 
 LINUX_INC :=	-Iinclude/linux
+include $(WLAN_ROOT)/QCOM_DRV_DECOUPLED/Kbuild
 
 INCS :=		$(BAP_INC) \
 		$(DXE_INC) \
@@ -713,24 +747,7 @@ CDEFINES += -DEXISTS_MSM_SMSM
 endif
 
 # Fix build for GCC 4.7
-EXTRA_CFLAGS += -Wno-maybe-uninitialized -Wno-unused-function -Wno-unused-variable
-
-# Why you so though, Clang!
-ifeq ($(cc-name),clang)
-EXTRA_CFLAGS += $(call cc-disable-warning,array-bounds,)
-endif
-EXTRA_CFLAGS += $(call cc-disable-warning,enum-conversion,)
-EXTRA_CFLAGS += $(call cc-disable-warning,non-literal-null-conversion,)
-EXTRA_CFLAGS += $(call cc-disable-warning,typedef-redefinition,)
-
-
-# Not gonna fix these warnings, clang!
-ifeq ($(cc-name),clang)
-EXTRA_CFLAGS += $(call cc-disable-warning,array-bounds,)
-endif
-EXTRA_CFLAGS += $(call cc-disable-warning,enum-conversion,)
-EXTRA_CFLAGS += $(call cc-disable-warning,non-literal-null-conversion,)
-EXTRA_CFLAGS += $(call cc-disable-warning,typedef-redefinition,)
+EXTRA_CFLAGS += -Wno-maybe-uninitialized -Wno-unused-function
 
 ifeq ($(CONFIG_WLAN_OFFLOAD_PACKETS),y)
 CDEFINES += -DWLAN_FEATURE_OFFLOAD_PACKETS

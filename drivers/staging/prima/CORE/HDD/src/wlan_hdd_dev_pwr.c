@@ -172,7 +172,7 @@ static int wlan_suspend(hdd_context_t* pHddCtx)
                       WLAN_LOG_REASON_POWER_COLLAPSE_FAIL,
                       FALSE, TRUE);
        }
-      /* return -EPERM; */
+       return -EPERM;
    }
    pHddCtx->continuous_suspend_fail_cnt = 0;
    /*
